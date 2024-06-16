@@ -1,0 +1,110 @@
+#pragma kernel Update
+
+uint height;
+uint width;
+
+struct Agent {
+    float2 position; 
+    float angle;
+};
+    
+RWStructuredBuffer<Agent> agents;
+uint numAgents;
+RWTexture2D<float4> Texture;
+RWTexture2D<float4> FadedTexture;
+float moveSpeed;
+float turnSpeed;
+float deltaTime;
+float sensorDistance;
+int sensorSize;
+float sensorAngle;
+float time;
+
+uint hash(uint state) {
+    state ^= 2747636419u; 
+    state *= 2654435769u; 
+    state ^= state >> 16; 
+    state *= 2654435769u; 
+    state ^= state >> 16; 
+    state *= 2654435769u;
+    return state;
+}
+float scaleHash(uint state)
+{
+    return state / 4294967295.0;
+}
+
+float sense(Agent agent, float angle) {
+    float2 direction = float2(cos(agent.angle + angle), sin(agent.angle + angle));
+    float2 center = agent.position + direction * sensorDistance;
+    int2 texCoord = int2(center);
+
+    float sum = 0;
+    for (int i = -sensorSize; i <= sensorSize; i++) {
+        for (int j = -sensorSize; j <= sensorSize; j++) {
+            int clampedX = max(0, min(width-1, texCoord.x + i));
+            int clampedY = max(0, min(height-1, texCoord.y + j));
+            sum += Texture[int2(clampedX, clampedY)];
+        }
+    }
+    return sum;
+}
+
+[numthreads(1024,1,1)]
+void Update (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x > numAgents) { return; }
+
+    float PI = 3.14159;
+    
+    uint random = hash(agents[id.x].position.y * width + agents[id.x].position.x + hash(id.x + time * 100000));
+
+    float left = sense(agents[id.x], sensorAngle);
+    float center = sense(agents[id.x], 0);
+    float right = sense(agents[id.x], -sensorAngle);
+    
+    //*
+    if (left > center && left > right) {
+        agents[id.x].angle += turnSpeed*deltaTime;
+    } else if (right > center && right > left) {
+        agents[id.x].angle -= turnSpeed*deltaTime;
+    }
+    //*/
+    
+    float2 direction = float2(cos(agents[id.x].angle), sin(agents[id.x].angle));
+    float2 newPosition = agents[id.x].position + direction * moveSpeed*deltaTime;
+
+    if (newPosition.x < 0 || newPosition.x > width || newPosition.y < 0 || newPosition.y > height) {
+        agents[id.x].angle = scaleHash(random) * 2 * PI;
+        newPosition = max(0, min(float2(width, height), newPosition));
+    }
+
+    
+    int2 texCoord = int2(newPosition);
+    Texture[texCoord] = 1;
+    agents[id.x].position = newPosition;
+}
+
+#pragma kernel FadeTexture
+float diffuseRate;
+float decayRate;
+
+[numthreads(32,32,1)]
+void FadeTexture(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < 0 || id.x >= width || id.y < 0 || id.y >= height) {
+		return;
+	}
+
+    float4 sum = 0;
+    float4 original = Texture[id.xy];
+    for (int i = -1; i <= 1; i++) {
+        for (int j = -1; j <= 1; j++) {
+            int clampedX = max(0, min(width-1, id.x + i));
+            int clampedY = max(0, min(height-1, id.y + j));
+            sum += Texture[int2(id.x + i, id.y + j)];
+        }
+    }
+    float4 blurred = lerp(original, sum / 9, diffuseRate*deltaTime);
+    FadedTexture[id.xy] = max(0, blurred - decayRate*deltaTime);
+}
