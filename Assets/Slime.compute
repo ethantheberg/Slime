@@ -10,14 +10,19 @@ struct Agent {
     
 RWStructuredBuffer<Agent> agents;
 uint numAgents;
-RWTexture2D<float4> Texture;
-RWTexture2D<float4> FadedTexture;
+RWTexture2D<float> trailMap;
+
 float moveSpeed;
 float turnSpeed;
-float deltaTime;
+float trailStrength;
+
 float sensorDistance;
-int sensorSize;
 float sensorAngle;
+
+float2 mousePosition;
+bool mouseDown;
+
+float deltaTime;
 float time;
 
 uint hash(uint state) {
@@ -34,20 +39,29 @@ float scaleHash(uint state)
     return state / 4294967295.0;
 }
 
-float sense(Agent agent, float angle) {
+float sense(Agent agent, float angle, float distance) {
     float2 direction = float2(cos(agent.angle + angle), sin(agent.angle + angle));
-    float2 center = agent.position + direction * sensorDistance;
+    float2 center = agent.position + direction * distance;
     int2 texCoord = int2(center);
-
+    
     float sum = 0;
-    for (int i = -sensorSize; i <= sensorSize; i++) {
-        for (int j = -sensorSize; j <= sensorSize; j++) {
-            int clampedX = max(0, min(width-1, texCoord.x + i));
-            int clampedY = max(0, min(height-1, texCoord.y + j));
-            sum += Texture[int2(clampedX, clampedY)];
+    for (int i = -2; i <= 2; i++) {
+        for (int j = -2; j <= 2; j++) {
+            int clampedX = (texCoord.x + i + width) % width;
+            int clampedY = (texCoord.y + j + height) % height;
+            sum += trailMap[int2(clampedX, clampedY)];
         }
     }
-    return sum;
+    return sum/25;
+}
+float senseWeightingFunction(float x) {
+    return x;
+    if(x < 0.8){
+        return x*(1.6-x)/0.64;
+    }
+    else {
+        return 1-25*(x-0.8)*(x-0.8);
+    }
 }
 
 [numthreads(1024,1,1)]
@@ -59,33 +73,37 @@ void Update (uint3 id : SV_DispatchThreadID)
     
     uint random = hash(agents[id.x].position.y * width + agents[id.x].position.x + hash(id.x + time * 100000));
 
-    float left = sense(agents[id.x], sensorAngle);
-    float center = sense(agents[id.x], 0);
-    float right = sense(agents[id.x], -sensorAngle);
+    float left = senseWeightingFunction(sense(agents[id.x], sensorAngle, sensorDistance));
+    float center = senseWeightingFunction(sense(agents[id.x], 0, sensorDistance));
+    float right = senseWeightingFunction(sense(agents[id.x], -sensorAngle, sensorDistance));
     
     //*
     if (left > center && left > right) {
-        agents[id.x].angle += turnSpeed*deltaTime;
+        agents[id.x].angle += scaleHash(random)*turnSpeed*deltaTime;
     } else if (right > center && right > left) {
-        agents[id.x].angle -= turnSpeed*deltaTime;
+        agents[id.x].angle -= scaleHash(random)*turnSpeed*deltaTime;
+    } else {
+        agents[id.x].angle += (scaleHash(random)-0.5)*turnSpeed*deltaTime;
     }
     //*/
     
     float2 direction = float2(cos(agents[id.x].angle), sin(agents[id.x].angle));
-    float2 newPosition = agents[id.x].position + direction * moveSpeed*deltaTime;
-
-    if (newPosition.x < 0 || newPosition.x > width || newPosition.y < 0 || newPosition.y > height) {
-        agents[id.x].angle = scaleHash(random) * 2 * PI;
-        newPosition = max(0, min(float2(width, height), newPosition));
+    if(mouseDown) {
+        direction = normalize(mousePosition - agents[id.x].position);
+        //newPosition = agents[id.x].position + direction;
     }
-
+    float localStrength = sense(agents[id.x], 0, 0)*2;
+    float2 newPosition = agents[id.x].position + direction * moveSpeed * localStrength *deltaTime;
+    newPosition.x = (newPosition.x + width) % width;
+    newPosition.y = (newPosition.y + height) % height;
     
     int2 texCoord = int2(newPosition);
-    Texture[texCoord] = 1;
+    trailMap[texCoord] = min(1, trailMap[texCoord] + trailStrength*deltaTime);
     agents[id.x].position = newPosition;
 }
 
 #pragma kernel FadeTexture
+RWTexture2D<float> fadedTrailMap;
 float diffuseRate;
 float decayRate;
 
@@ -96,15 +114,30 @@ void FadeTexture(uint3 id : SV_DispatchThreadID)
 		return;
 	}
 
-    float4 sum = 0;
-    float4 original = Texture[id.xy];
+    float original = trailMap[id.xy];
+    float sum = 0;
     for (int i = -1; i <= 1; i++) {
         for (int j = -1; j <= 1; j++) {
-            int clampedX = max(0, min(width-1, id.x + i));
-            int clampedY = max(0, min(height-1, id.y + j));
-            sum += Texture[int2(id.x + i, id.y + j)];
+            int clampedX = (id.x + i + width) % width;
+            int clampedY = (id.y + j + height) % height;
+            sum += trailMap[int2(clampedX, clampedY)];
         }
     }
-    float4 blurred = lerp(original, sum / 9, diffuseRate*deltaTime);
-    FadedTexture[id.xy] = max(0, blurred - decayRate*deltaTime);
+    float blurred = min(1, lerp(original, sum / 9, diffuseRate*deltaTime));
+    fadedTrailMap[id.xy] = min(1, blurred*(1 - decayRate*deltaTime)-0.000001);
+}
+
+#pragma kernel UpdateDisplayTexture
+RWTexture2D<float4> displayTexture;
+RWTexture2D<float4> gradientTexture;
+
+[numthreads(32,32,1)]
+void UpdateDisplayTexture(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < 0 || id.x >= width || id.y < 0 || id.y >= height) {
+        return;
+    }
+    float test = 0.5;
+    displayTexture[id.xy] = gradientTexture[uint2(uint(trailMap[id.xy]*255), 0)];
+    //displayTexture[id.xy] = gradientTexture[int2(128, 0)];
 }
