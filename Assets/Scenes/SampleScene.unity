@@ -245,29 +245,29 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   updatesPerFrame: 1
-  N_AGENTS: 1000000
-  moveSpeed: 200
-  turnSpeed: 21
-  sensorDistance: 4
-  sensorAngle: 10
-  trailStrength: 2.66
+  N_AGENTS: 3000000
+  moveSpeed: 361.6
+  turnSpeed: 30.5
+  sensorDistance: 25.25
+  sensorAngle: 28.1
+  trailStrength: 8.2
   gradient:
     serializedVersion: 2
-    key0: {r: 0, g: 0, b: 0, a: 1}
-    key1: {r: 0, g: 0.0710301, b: 0.43137255, a: 1}
-    key2: {r: 0.54508275, g: 0.111739054, b: 0.764151, a: 0}
-    key3: {r: 1, g: 0, b: 0.3217411, a: 0}
-    key4: {r: 1, g: 0.52135247, b: 0.0047169924, a: 0}
-    key5: {r: 1, g: 0.8947368, b: 0, a: 0}
-    key6: {r: 1, g: 1, b: 1, a: 0}
+    key0: {r: 1, g: 1, b: 1, a: 1}
+    key1: {r: 1, g: 0.27843142, b: 0.5933731, a: 1}
+    key2: {r: 0, g: 0.14966917, b: 1, a: 0}
+    key3: {r: 0, g: 0, b: 0, a: 0}
+    key4: {r: 0, g: 0, b: 0, a: 0}
+    key5: {r: 0, g: 0, b: 0, a: 0}
+    key6: {r: 0, g: 0, b: 0, a: 0}
     key7: {r: 0, g: 0, b: 0, a: 0}
-    ctime0: 0
-    ctime1: 10987
-    ctime2: 24672
-    ctime3: 35273
-    ctime4: 47224
-    ctime5: 57440
-    ctime6: 65535
+    ctime0: 771
+    ctime1: 15998
+    ctime2: 43176
+    ctime3: 65535
+    ctime4: 0
+    ctime5: 0
+    ctime6: 0
     ctime7: 0
     atime0: 0
     atime1: 65535
@@ -279,10 +279,10 @@ MonoBehaviour:
     atime7: 0
     m_Mode: 2
     m_ColorSpace: -1
-    m_NumColorKeys: 7
+    m_NumColorKeys: 4
     m_NumAlphaKeys: 2
-  decayRate: 6.54
-  diffuseRate: 72.3
+  decayRate: 3.23
+  diffuseRate: 31.8
   width: 1920
   displayMaterial: {fileID: 2100000, guid: 4e649fea2707a43feb44dda576d7cf00, type: 2}
   trailMapMaterial: {fileID: 2100000, guid: bf26d86f3e19e4775973d7dfca94133e, type: 2}
